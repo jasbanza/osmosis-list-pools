@@ -204,6 +204,88 @@
 
     <script>
         let allPools = [];
+        let assetList = null; // Cache for Osmosis asset list
+        
+        // Function to fetch Osmosis asset list
+        async function fetchAssetList() {
+            if (assetList) return assetList;
+            
+            try {
+                console.log('Fetching Osmosis asset list...');
+                const response = await fetch('https://raw.githubusercontent.com/osmosis-labs/assetlists/refs/heads/main/osmosis-1/generated/asset_detail/assetlist.json');
+                const data = await response.json();
+                assetList = data;
+                return assetList;
+            } catch (error) {
+                console.warn('Could not fetch asset list:', error);
+                return null;
+            }
+        }
+        
+        // Function to get asset info from denom
+        function getAssetInfo(denom) {
+            if (!assetList || !assetList.assets) {
+                return {
+                    symbol: denom,
+                    name: denom,
+                    display: denom,
+                    logo_URIs: null
+                };
+            }
+            
+            // Find asset by denom (base denomination)
+            let asset = assetList.assets.find(a => a.base === denom);
+            
+            // If not found by base, try to find by other denoms
+            if (!asset) {
+                asset = assetList.assets.find(a => 
+                    a.denom_units && a.denom_units.some(unit => unit.denom === denom)
+                );
+            }
+            
+            // If still not found, try IBC denoms
+            if (!asset && denom.startsWith('ibc/')) {
+                asset = assetList.assets.find(a => 
+                    a.traces && a.traces.some(trace => 
+                        trace.counterparty && trace.counterparty.base_denom === denom
+                    )
+                );
+            }
+            
+            if (asset) {
+                return {
+                    symbol: asset.symbol || asset.display || denom,
+                    name: asset.name || asset.display || denom,
+                    display: asset.display || asset.symbol || denom,
+                    logo_URIs: asset.logo_URIs,
+                    description: asset.description,
+                    coingecko_id: asset.coingecko_id
+                };
+            }
+            
+            // Fallback for unknown denoms
+            return {
+                symbol: formatDenom(denom),
+                name: formatDenom(denom),
+                display: formatDenom(denom),
+                logo_URIs: null
+            };
+        }
+        
+        // Function to format denom for display
+        function formatDenom(denom) {
+            if (denom.startsWith('factory/')) {
+                const parts = denom.split('/');
+                return parts[parts.length - 1].toUpperCase();
+            }
+            if (denom.startsWith('ibc/')) {
+                return `IBC/${denom.slice(4, 8).toUpperCase()}...`;
+            }
+            if (denom === 'uosmo') return 'OSMO';
+            if (denom === 'uion') return 'ION';
+            if (denom === 'uakt') return 'AKT';
+            return denom.replace('u', '').toUpperCase();
+        }
         
         async function fetchPools() {
             const statusDiv = document.getElementById('status');
@@ -218,9 +300,14 @@
             
             // Show loading state
             fetchBtn.disabled = true;
-            statusDiv.innerHTML = '<div class="loading">🔄 Fetching pools from Osmosis LCD API...</div>';
+            statusDiv.innerHTML = '<div class="loading">🔄 Fetching asset list and pools from Osmosis...</div>';
             
             try {
+                // Fetch asset list first
+                await fetchAssetList();
+                
+                statusDiv.innerHTML = '<div class="loading">🔄 Fetching pools from Osmosis LCD API...</div>';
+                
                 // Use lcd.osmosis.zone with poolmanager all-pools endpoint
                 const endpoints = [
                     'https://lcd.osmosis.zone/osmosis/poolmanager/v1beta1/all-pools'
@@ -327,11 +414,51 @@
                     assetsHtml = poolAssets.map(asset => {
                         const denom = asset.token?.denom || asset.denom || 'Unknown';
                         const amount = asset.token?.amount || asset.amount || '0';
-                        return `${denom}: ${formatNumber(amount)}`;
-                    }).join('<br>');
+                        const assetInfo = getAssetInfo(denom);
+                        
+                        const logoHtml = assetInfo.logo_URIs?.png ? 
+                            `<img src="${assetInfo.logo_URIs.png}" alt="${assetInfo.symbol}" style="width: 16px; height: 16px; margin-right: 5px; vertical-align: middle;">` : 
+                            '';
+                        
+                        return `
+                            <div style="display: flex; align-items: center; margin: 5px 0; padding: 5px; background: #f8f9fa; border-radius: 4px;">
+                                ${logoHtml}
+                                <div style="flex: 1;">
+                                    <div style="font-weight: bold; color: #2d3748;">${assetInfo.symbol}</div>
+                                    <div style="font-size: 11px; color: #666;">${assetInfo.name}</div>
+                                    <div style="font-size: 10px; color: #888; font-family: monospace;">${formatNumber(amount)}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
                 } else if (pool.token0 && pool.token1) {
                     // Concentrated liquidity pools
-                    assetsHtml = `${pool.token0}<br>${pool.token1}`;
+                    const token0Info = getAssetInfo(pool.token0);
+                    const token1Info = getAssetInfo(pool.token1);
+                    
+                    const logo0Html = token0Info.logo_URIs?.png ? 
+                        `<img src="${token0Info.logo_URIs.png}" alt="${token0Info.symbol}" style="width: 16px; height: 16px; margin-right: 5px; vertical-align: middle;">` : 
+                        '';
+                    const logo1Html = token1Info.logo_URIs?.png ? 
+                        `<img src="${token1Info.logo_URIs.png}" alt="${token1Info.symbol}" style="width: 16px; height: 16px; margin-right: 5px; vertical-align: middle;">` : 
+                        '';
+                    
+                    assetsHtml = `
+                        <div style="display: flex; align-items: center; margin: 5px 0; padding: 5px; background: #f8f9fa; border-radius: 4px;">
+                            ${logo0Html}
+                            <div style="flex: 1;">
+                                <div style="font-weight: bold; color: #2d3748;">${token0Info.symbol}</div>
+                                <div style="font-size: 11px; color: #666;">${token0Info.name}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; margin: 5px 0; padding: 5px; background: #f8f9fa; border-radius: 4px;">
+                            ${logo1Html}
+                            <div style="flex: 1;">
+                                <div style="font-weight: bold; color: #2d3748;">${token1Info.symbol}</div>
+                                <div style="font-size: 11px; color: #666;">${token1Info.name}</div>
+                            </div>
+                        </div>
+                    `;
                 }
                 
                 return `
@@ -343,7 +470,7 @@
                             ${exitFee !== 'Unknown' ? `<strong>Exit Fee:</strong> ${formatPercentage(exitFee)}<br>` : ''}
                             <strong>Assets:</strong> ${poolAssets.length || (pool.token0 && pool.token1 ? 2 : 'Unknown')}
                         </div>
-                        ${assetsHtml ? `<div class="pool-assets">${assetsHtml}</div>` : ''}
+                        ${assetsHtml ? `<div class="pool-assets" style="margin-top: 10px;">${assetsHtml}</div>` : ''}
                     </div>
                 `;
             }).join('');
