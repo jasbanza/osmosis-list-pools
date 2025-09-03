@@ -159,6 +159,46 @@
             font-size: 12px;
             opacity: 0.8;
         }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .pagination button {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            color: #4a5568;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            min-width: 40px;
+        }
+        .pagination button:hover:not(:disabled) {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        .pagination button:disabled {
+            background: #f7fafc;
+            color: #a0aec0;
+            cursor: not-allowed;
+            border-color: #e2e8f0;
+        }
+        .pagination button.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        .pagination-info {
+            color: #4a5568;
+            font-weight: 500;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -184,6 +224,17 @@
         </div>
 
         <div id="status"></div>
+        
+        <div id="pagination" class="pagination" style="display: none;">
+            <button id="firstPage" onclick="goToPage(1)">⟪ First</button>
+            <button id="prevPage" onclick="goToPage(currentPage - 1)">‹ Previous</button>
+            <div class="pagination-info">
+                Page <span id="currentPageNum">1</span> of <span id="totalPages">1</span>
+            </div>
+            <button id="nextPage" onclick="goToPage(currentPage + 1)">Next ›</button>
+            <button id="lastPage" onclick="goToPage(totalPages)">Last ⟫</button>
+        </div>
+        
         <div id="stats" class="stats" style="display: none;">
             <div class="stat">
                 <div class="stat-value" id="totalPools">0</div>
@@ -205,6 +256,10 @@
     <script>
         let allPools = [];
         let assetList = null; // Cache for Osmosis asset list
+        let currentPage = 1;
+        let totalPages = 1;
+        let poolsPerPage = 10;
+        let nextKey = null;
         
         // Function to fetch Osmosis asset list
         async function fetchAssetList() {
@@ -294,9 +349,13 @@
             const maxPools = parseInt(document.getElementById('maxPools').value) || 10;
             const sortOrder = document.getElementById('sortOrder').value;
             
+            // Update pools per page based on max pools setting
+            poolsPerPage = maxPools;
+            
             // Clear previous results
             poolsContainer.innerHTML = '';
             document.getElementById('stats').style.display = 'none';
+            document.getElementById('pagination').style.display = 'none';
             
             // Show loading state
             fetchBtn.disabled = true;
@@ -307,6 +366,9 @@
                 await fetchAssetList();
                 
                 statusDiv.innerHTML = '<div class="loading">🔄 Fetching pools from Osmosis LCD API...</div>';
+                
+                // Fetch a larger batch of pools for better pagination
+                const batchSize = Math.max(maxPools * 5, 100); // Fetch at least 100 pools for pagination
                 
                 // Use lcd.osmosis.zone with poolmanager all-pools endpoint
                 const endpoints = [
@@ -319,7 +381,7 @@
                 for (const endpoint of endpoints) {
                     try {
                         console.log(`Trying endpoint: ${endpoint}`);
-                        const res = await fetch(`${endpoint}?pagination.limit=${maxPools}&pagination.reverse=${sortOrder === 'newest'}`);
+                        const res = await fetch(`${endpoint}?pagination.limit=${batchSize}&pagination.reverse=${sortOrder === 'newest'}`);
                         if (res.ok) {
                             response = res;
                             usedEndpoint = endpoint;
@@ -351,22 +413,23 @@
                     return sortOrder === 'newest' ? idB - idA : idA - idB;
                 });
                 
-                // Limit results
-                const filteredPools = allPools.slice(0, maxPools);
-                
-                if (filteredPools.length === 0) {
+                if (allPools.length === 0) {
                     statusDiv.innerHTML = '<div class="error">No pools found</div>';
                     return;
                 }
                 
+                // Calculate pagination
+                totalPages = Math.ceil(allPools.length / poolsPerPage);
+                currentPage = 1; // Reset to first page
+                
                 // Show success message
-                statusDiv.innerHTML = `<div class="success">✅ Successfully fetched ${filteredPools.length} pools from ${usedEndpoint}</div>`;
+                statusDiv.innerHTML = `<div class="success">✅ Successfully fetched ${allPools.length} pools from ${usedEndpoint}</div>`;
                 
-                // Update stats
-                updateStats(allPools.length, filteredPools.length);
+                // Update pagination controls
+                updatePaginationControls();
                 
-                // Display pools
-                displayPools(filteredPools);
+                // Display first page
+                displayCurrentPage();
                 
             } catch (error) {
                 console.error('Error fetching pools:', error);
@@ -500,6 +563,51 @@
             const feeFloat = parseFloat(fee);
             if (isNaN(feeFloat)) return fee;
             return (feeFloat * 100).toFixed(3) + '%';
+        }
+        
+        // Pagination functions
+        function updatePaginationControls() {
+            const paginationDiv = document.getElementById('pagination');
+            const firstPageBtn = document.getElementById('firstPage');
+            const prevPageBtn = document.getElementById('prevPage');
+            const nextPageBtn = document.getElementById('nextPage');
+            const lastPageBtn = document.getElementById('lastPage');
+            const currentPageNum = document.getElementById('currentPageNum');
+            const totalPagesSpan = document.getElementById('totalPages');
+            
+            // Show pagination only if we have data
+            if (allPools.length > 0) {
+                paginationDiv.style.display = 'flex';
+                
+                // Update page numbers
+                currentPageNum.textContent = currentPage;
+                totalPagesSpan.textContent = totalPages;
+                
+                // Enable/disable buttons based on current page
+                firstPageBtn.disabled = currentPage === 1;
+                prevPageBtn.disabled = currentPage === 1;
+                nextPageBtn.disabled = currentPage >= totalPages;
+                lastPageBtn.disabled = currentPage >= totalPages;
+            } else {
+                paginationDiv.style.display = 'none';
+            }
+        }
+        
+        function goToPage(page) {
+            if (page < 1 || page > totalPages || page === currentPage) return;
+            
+            currentPage = page;
+            updatePaginationControls();
+            displayCurrentPage();
+        }
+        
+        function displayCurrentPage() {
+            const startIndex = (currentPage - 1) * poolsPerPage;
+            const endIndex = startIndex + poolsPerPage;
+            const currentPools = allPools.slice(startIndex, endIndex);
+            
+            displayPools(currentPools);
+            updateStats(allPools.length, currentPools.length);
         }
         
         // Auto-fetch on page load
