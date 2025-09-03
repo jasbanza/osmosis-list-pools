@@ -9,23 +9,27 @@ A simple web application to fetch and display liquidity pools from the Osmosis b
 ## 📋 Features
 
 - **Pool Data Fetching**: Retrieves pool information from Osmosis poolmanager API
+- **Enhanced Token Display**: Shows token logos, names, and symbols using official Osmosis asset list
 - **Multiple Pool Types**: Supports Standard AMM, Concentrated Liquidity, and CosmWasm pools
 - **Sorting Options**: Sort pools by newest or oldest first (by Pool ID)
 - **Configurable Results**: Set maximum number of pools to fetch (1-100)
 - **Pool Information Display**:
   - Pool ID and type
   - Swap and exit fees
-  - Asset information and amounts
+  - Asset information with logos, names, and amounts
+  - Enhanced token metadata from Osmosis asset registry
   - Pool-specific data based on type
 - **Responsive Design**: Clean, modern interface that works on all devices
 - **Real-time API Integration**: Direct connection to Osmosis LCD endpoints
+- **Asset List Caching**: Efficient caching of token metadata for improved performance
 
 ## 🛠️ Technical Details
 
 ### API Endpoints
 - **Primary**: `https://lcd.osmosis.zone/osmosis/poolmanager/v1beta1/all-pools`
+- **Asset Metadata**: `https://raw.githubusercontent.com/osmosis-labs/assetlists/refs/heads/main/osmosis-1/generated/asset_detail/assetlist.json`
 - **Protocol**: REST API with pagination support
-- **Data Format**: JSON response with pool arrays
+- **Data Format**: JSON response with pool arrays and token metadata
 
 ### Pool Types Supported
 1. **Standard AMM Pools** (`/osmosis.gamm.v1beta1.Pool`)
@@ -38,6 +42,10 @@ A simple web application to fetch and display liquidity pools from the Osmosis b
 - Responsive grid layout
 - Number formatting for large amounts
 - Percentage formatting for fees
+- Token logo display from official Osmosis asset registry
+- Enhanced token names and symbols
+- Smart denom formatting for unknown tokens
+- Asset metadata caching for performance
 
 ## 🏃‍♂️ Quick Start
 
@@ -75,7 +83,12 @@ Simply visit the [live application](https://jasbanza.github.io/osmosis-list-pool
 - **Type**: The specific pool implementation (AMM, Concentrated Liquidity, etc.)
 - **Swap Fee**: Fee charged for token swaps (as percentage)
 - **Exit Fee**: Fee for exiting the pool (if applicable)
-- **Assets**: Number and details of tokens in the pool
+- **Assets**: Enhanced display showing:
+  - Token logos from official Osmosis asset registry
+  - Token symbols (e.g., OSMO, ATOM)
+  - Full token names (e.g., Osmosis, Cosmos Hub)
+  - Formatted amounts with K/M/B notation
+  - Support for IBC and factory tokens
 
 ## 🔧 Configuration
 
