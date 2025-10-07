@@ -661,10 +661,10 @@
             }
             
             return allPools.filter(pool => {
-                // Filter by pool number
+                // Filter by pool number (exact match)
                 if (poolNumberValue) {
                     const poolId = (pool.id || pool.pool_id || '').toString();
-                    if (!poolId.includes(poolNumberValue)) {
+                    if (poolId !== poolNumberValue) {
                         return false;
                     }
                 }
