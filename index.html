@@ -199,6 +199,57 @@
             font-weight: 500;
             font-size: 14px;
         }
+        .filters-section {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 2px solid #e2e8f0;
+        }
+        .filters-section h3 {
+            margin: 0 0 15px 0;
+            color: #4a5568;
+            font-size: 1.1em;
+        }
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .filter-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+        .clear-filters-btn {
+            background: #e2e8f0;
+            color: #4a5568;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        .clear-filters-btn:hover {
+            background: #cbd5e0;
+            transform: translateY(-1px);
+        }
+        input[type="text"], select {
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        input[type="text"]:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
     </style>
 </head>
 <body>
@@ -224,6 +275,32 @@
         </div>
 
         <div id="status"></div>
+
+        <div id="filtersSection" class="filters-section" style="display: none;">
+            <h3>🔍 Filters</h3>
+            <div class="filters-grid">
+                <div class="input-group">
+                    <label for="assetFilter">Asset (denom or name):</label>
+                    <input type="text" id="assetFilter" placeholder="e.g., OSMO, ATOM, uosmo, ibc/27394FB..." onkeyup="applyFilters()">
+                </div>
+                <div class="input-group">
+                    <label for="poolNumberFilter">Pool Number:</label>
+                    <input type="text" id="poolNumberFilter" placeholder="e.g., 1, 10, 100" onkeyup="applyFilters()">
+                </div>
+                <div class="input-group">
+                    <label for="poolTypeFilter">Pool Type:</label>
+                    <select id="poolTypeFilter" onchange="applyFilters()">
+                        <option value="">All Types</option>
+                        <option value="Concentrated Liquidity">Concentrated Liquidity</option>
+                        <option value="Standard AMM">Standard AMM</option>
+                        <option value="CosmWasm Pool">CosmWasm Pool</option>
+                    </select>
+                </div>
+            </div>
+            <div class="filter-actions">
+                <button class="clear-filters-btn" onclick="clearFilters()">Clear Filters</button>
+            </div>
+        </div>
         
         <div id="pagination" class="pagination" style="display: none;">
             <button id="firstPage" onclick="goToPage(1)">⟪ First</button>
@@ -255,6 +332,7 @@
 
     <script>
         let allPools = [];
+        let filteredPools = [];
         let assetList = null; // Cache for Osmosis asset list
         let currentPage = 1;
         let totalPages = 1;
@@ -418,9 +496,15 @@
                     return;
                 }
                 
+                // Initialize filtered pools (start with all pools)
+                filteredPools = allPools;
+                
                 // Calculate pagination
-                totalPages = Math.ceil(allPools.length / poolsPerPage);
+                totalPages = Math.ceil(filteredPools.length / poolsPerPage);
                 currentPage = 1; // Reset to first page
+                
+                // Show filter section
+                document.getElementById('filtersSection').style.display = 'block';
                 
                 // Show success message
                 statusDiv.innerHTML = `<div class="success">✅ Successfully fetched ${allPools.length} pools from ${usedEndpoint}</div>`;
@@ -565,6 +649,139 @@
             return (feeFloat * 100).toFixed(3) + '%';
         }
         
+        // Filter functions
+        function filterPools() {
+            const assetFilterValue = document.getElementById('assetFilter').value.trim().toLowerCase();
+            const poolNumberValue = document.getElementById('poolNumberFilter').value.trim();
+            const poolTypeValue = document.getElementById('poolTypeFilter').value;
+            
+            // If no filters are active, return all pools
+            if (!assetFilterValue && !poolNumberValue && !poolTypeValue) {
+                return allPools;
+            }
+            
+            return allPools.filter(pool => {
+                // Filter by pool number
+                if (poolNumberValue) {
+                    const poolId = (pool.id || pool.pool_id || '').toString();
+                    if (!poolId.includes(poolNumberValue)) {
+                        return false;
+                    }
+                }
+                
+                // Filter by pool type
+                if (poolTypeValue) {
+                    const poolType = getPoolType(pool);
+                    if (poolType !== poolTypeValue) {
+                        return false;
+                    }
+                }
+                
+                // Filter by asset (denom or pretty name)
+                if (assetFilterValue) {
+                    const poolAssets = pool.pool_assets || pool.poolAssets || [];
+                    let hasMatchingAsset = false;
+                    
+                    // Normalize the filter value - handle ibc/ prefix
+                    let normalizedFilter = assetFilterValue;
+                    if (normalizedFilter.startsWith('ibc/')) {
+                        normalizedFilter = normalizedFilter.substring(4);
+                    }
+                    
+                    // Check pool_assets array
+                    if (poolAssets && poolAssets.length > 0) {
+                        hasMatchingAsset = poolAssets.some(asset => {
+                            const denom = (asset.token?.denom || asset.denom || '').toLowerCase();
+                            const assetInfo = getAssetInfo(denom);
+                            
+                            // Check base denom (with and without ibc/ prefix)
+                            if (denom.includes(assetFilterValue)) {
+                                return true;
+                            }
+                            if (denom.startsWith('ibc/') && denom.substring(4).includes(normalizedFilter)) {
+                                return true;
+                            }
+                            
+                            // Check symbol, name, and display name
+                            if (assetInfo.symbol && assetInfo.symbol.toLowerCase().includes(assetFilterValue)) {
+                                return true;
+                            }
+                            if (assetInfo.name && assetInfo.name.toLowerCase().includes(assetFilterValue)) {
+                                return true;
+                            }
+                            if (assetInfo.display && assetInfo.display.toLowerCase().includes(assetFilterValue)) {
+                                return true;
+                            }
+                            
+                            return false;
+                        });
+                    }
+                    
+                    // Check concentrated liquidity pools (token0, token1)
+                    if (!hasMatchingAsset && pool.token0 && pool.token1) {
+                        const token0 = pool.token0.toLowerCase();
+                        const token1 = pool.token1.toLowerCase();
+                        const token0Info = getAssetInfo(pool.token0);
+                        const token1Info = getAssetInfo(pool.token1);
+                        
+                        // Check denoms
+                        if (token0.includes(assetFilterValue) || token1.includes(assetFilterValue)) {
+                            hasMatchingAsset = true;
+                        }
+                        if (token0.startsWith('ibc/') && token0.substring(4).includes(normalizedFilter)) {
+                            hasMatchingAsset = true;
+                        }
+                        if (token1.startsWith('ibc/') && token1.substring(4).includes(normalizedFilter)) {
+                            hasMatchingAsset = true;
+                        }
+                        
+                        // Check symbols and names
+                        if (token0Info.symbol && token0Info.symbol.toLowerCase().includes(assetFilterValue)) {
+                            hasMatchingAsset = true;
+                        }
+                        if (token1Info.symbol && token1Info.symbol.toLowerCase().includes(assetFilterValue)) {
+                            hasMatchingAsset = true;
+                        }
+                        if (token0Info.name && token0Info.name.toLowerCase().includes(assetFilterValue)) {
+                            hasMatchingAsset = true;
+                        }
+                        if (token1Info.name && token1Info.name.toLowerCase().includes(assetFilterValue)) {
+                            hasMatchingAsset = true;
+                        }
+                    }
+                    
+                    if (!hasMatchingAsset) {
+                        return false;
+                    }
+                }
+                
+                return true;
+            });
+        }
+        
+        function applyFilters() {
+            filteredPools = filterPools();
+            
+            // Reset to page 1 when filters change
+            currentPage = 1;
+            
+            // Recalculate pagination based on filtered results
+            totalPages = Math.ceil(filteredPools.length / poolsPerPage);
+            
+            // Update pagination controls
+            updatePaginationControls();
+            
+            // Display filtered results
+            displayCurrentPage();
+        }
+        
+        function clearFilters() {
+            document.getElementById('assetFilter').value = '';
+            document.getElementById('poolNumberFilter').value = '';
+            document.getElementById('poolTypeFilter').value = '';
+            applyFilters();
+        }
+        
         // Pagination functions
         function updatePaginationControls() {
             const paginationDiv = document.getElementById('pagination');
@@ -576,7 +793,7 @@
             const totalPagesSpan = document.getElementById('totalPages');
             
             // Show pagination only if we have data
-            if (allPools.length > 0) {
+            if (filteredPools.length > 0) {
                 paginationDiv.style.display = 'flex';
                 
                 // Update page numbers
@@ -604,10 +821,10 @@
         function displayCurrentPage() {
             const startIndex = (currentPage - 1) * poolsPerPage;
             const endIndex = startIndex + poolsPerPage;
-            const currentPools = allPools.slice(startIndex, endIndex);
+            const currentPools = filteredPools.slice(startIndex, endIndex);
             
             displayPools(currentPools);
-            updateStats(allPools.length, currentPools.length);
+            updateStats(allPools.length, filteredPools.length);
         }
         
         // Auto-fetch on page load
