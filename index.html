@@ -707,14 +707,15 @@
                     // Check pool_assets array
                     if (poolAssets && poolAssets.length > 0) {
                         hasMatchingAsset = poolAssets.some(asset => {
-                            const denom = (asset.token?.denom || asset.denom || '').toLowerCase();
+                            const denom = asset.token?.denom || asset.denom || '';
+                            const denomLower = denom.toLowerCase();
                             const assetInfo = getAssetInfo(denom);
                             
                             // Check base denom (with and without ibc/ prefix)
-                            if (denom.includes(assetFilterValue)) {
+                            if (denomLower.includes(assetFilterValue)) {
                                 return true;
                             }
-                            if (denom.startsWith('ibc/') && denom.substring(4).includes(normalizedFilter)) {
+                            if (denomLower.startsWith('ibc/') && denomLower.substring(4).includes(normalizedFilter)) {
                                 return true;
                             }
                             
@@ -735,19 +736,19 @@
                     
                     // Check concentrated liquidity pools (token0, token1)
                     if (!hasMatchingAsset && pool.token0 && pool.token1) {
-                        const token0 = pool.token0.toLowerCase();
-                        const token1 = pool.token1.toLowerCase();
+                        const token0Lower = pool.token0.toLowerCase();
+                        const token1Lower = pool.token1.toLowerCase();
                         const token0Info = getAssetInfo(pool.token0);
                         const token1Info = getAssetInfo(pool.token1);
                         
                         // Check denoms
-                        if (token0.includes(assetFilterValue) || token1.includes(assetFilterValue)) {
+                        if (token0Lower.includes(assetFilterValue) || token1Lower.includes(assetFilterValue)) {
                             hasMatchingAsset = true;
                         }
-                        if (token0.startsWith('ibc/') && token0.substring(4).includes(normalizedFilter)) {
+                        if (token0Lower.startsWith('ibc/') && token0Lower.substring(4).includes(normalizedFilter)) {
                             hasMatchingAsset = true;
                         }
-                        if (token1.startsWith('ibc/') && token1.substring(4).includes(normalizedFilter)) {
+                        if (token1Lower.startsWith('ibc/') && token1Lower.substring(4).includes(normalizedFilter)) {
                             hasMatchingAsset = true;
                         }
                         
