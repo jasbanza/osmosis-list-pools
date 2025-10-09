@@ -345,7 +345,7 @@
             
             try {
                 console.log('Fetching Osmosis asset list...');
-                const response = await fetch('https://raw.githubusercontent.com/osmosis-labs/assetlists/refs/heads/main/osmosis-1/generated/asset_detail/assetlist.json');
+                const response = await fetch('https://raw.githubusercontent.com/osmosis-labs/assetlists/refs/heads/main/osmosis-1/generated/frontend/assetlist.json');
                 const data = await response.json();
                 assetList = data;
                 return assetList;
@@ -362,12 +362,18 @@
                     symbol: denom,
                     name: denom,
                     display: denom,
-                    logo_URIs: null
+                    logo_URIs: null,
+                    decimals: 6
                 };
             }
             
-            // Find asset by denom (base denomination)
-            let asset = assetList.assets.find(a => a.base === denom);
+            // Find asset by coinMinimalDenom or sourceDenom (for frontend assetlist)
+            let asset = assetList.assets.find(a => a.coinMinimalDenom === denom || a.sourceDenom === denom);
+            
+            // If not found, try to find by base (for backward compatibility)
+            if (!asset) {
+                asset = assetList.assets.find(a => a.base === denom);
+            }
             
             // If not found by base, try to find by other denoms
             if (!asset) {
@@ -390,9 +396,10 @@
                     symbol: asset.symbol || asset.display || denom,
                     name: asset.name || asset.display || denom,
                     display: asset.display || asset.symbol || denom,
-                    logo_URIs: asset.logo_URIs,
+                    logo_URIs: asset.logoURIs || asset.logo_URIs,
                     description: asset.description,
-                    coingecko_id: asset.coingecko_id
+                    coingecko_id: asset.coingeckoId || asset.coingecko_id,
+                    decimals: asset.decimals || 6
                 };
             }
             
@@ -401,7 +408,8 @@
                 symbol: formatDenom(denom),
                 name: formatDenom(denom),
                 display: formatDenom(denom),
-                logo_URIs: null
+                logo_URIs: null,
+                decimals: 6
             };
         }
         
@@ -418,6 +426,12 @@
             if (denom === 'uion') return 'ION';
             if (denom === 'uakt') return 'AKT';
             return denom.replace('u', '').toUpperCase();
+        }
+        
+        // Function to convert base amount to display amount using decimals
+        function convertAmount(amount, decimals) {
+            const num = parseFloat(amount) || 0;
+            return num / Math.pow(10, decimals);
         }
         
         async function fetchPools() {
@@ -562,6 +576,7 @@
                         const denom = asset.token?.denom || asset.denom || 'Unknown';
                         const amount = asset.token?.amount || asset.amount || '0';
                         const assetInfo = getAssetInfo(denom);
+                        const displayAmount = convertAmount(amount, assetInfo.decimals);
                         
                         const logoHtml = assetInfo.logo_URIs?.png ? 
                             `<img src="${assetInfo.logo_URIs.png}" alt="${assetInfo.symbol}" style="width: 16px; height: 16px; margin-right: 5px; vertical-align: middle;">` : 
@@ -573,7 +588,7 @@
                                 <div style="flex: 1;">
                                     <div style="font-weight: bold; color: #2d3748;">${assetInfo.symbol}</div>
                                     <div style="font-size: 11px; color: #666;">${assetInfo.name}</div>
-                                    <div style="font-size: 10px; color: #888; font-family: monospace;">${formatNumber(amount)}</div>
+                                    <div style="font-size: 10px; color: #888; font-family: monospace;">${formatNumber(displayAmount)}</div>
                                 </div>
                             </div>
                         `;
