@@ -664,7 +664,7 @@
                 // Filter by pool number (exact match)
                 if (poolNumberValue) {
                     const poolId = (pool.id || pool.pool_id || '').toString();
-                    if (poolId !== poolNumberValue) {
+                    if (poolId !== poolNumberValue.toString()) {
                         return false;
                     }
                 }
