@@ -429,9 +429,10 @@
         }
         
         // Function to convert base amount to display amount using decimals
+        // For example: 1000000 with decimals=6 returns 1.0
         function convertAmount(amount, decimals) {
             const num = parseFloat(amount) || 0;
-            return num / Math.pow(10, decimals);
+            return num / (10 ** decimals);
         }
         
         async function fetchPools() {
